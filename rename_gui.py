@@ -2,9 +2,10 @@ import os
 import re
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
+import customtkinter as ctk
 
 # ---------------------------
-# Functions
+# Functions (UNCHANGED)
 # ---------------------------
 def parse_files(folder_path, file_ext=".mp3"):
     files = [f for f in os.listdir(folder_path) if f.endswith(file_ext)]
@@ -13,13 +14,9 @@ def parse_files(folder_path, file_ext=".mp3"):
     for f in sorted(files):
         name, ext = os.path.splitext(f)
 
-        # Remove trailing "Copy"
         name = re.sub(r'\s*Copy$', '', name, flags=re.IGNORECASE)
-
-        # Normalize spaces
         name = re.sub(r'\s+', ' ', name).strip()
 
-        # Match outer number + dash, then keep the rest
         match = re.match(r'^(0*\d+)\s*-\s*(.+)$', name)
         if match:
             outer_number = match.group(1)
@@ -34,7 +31,6 @@ def parse_files(folder_path, file_ext=".mp3"):
                 "title": title,
                 "ext": ext
             })
-
     return parsed
 
 
@@ -44,21 +40,33 @@ def select_folder():
         folder_path_var.set(folder)
         refresh_preview()
 
+
 def refresh_preview(*args):
     folder = folder_path_var.get()
     fmt = format_var.get()
+
     tree.delete(*tree.get_children())
-    if not os.path.isdir(folder):
-        return
-    files_data = parse_files(folder)
     previews.clear()
+
+    if not os.path.isdir(folder):
+        status_var.set("No valid folder selected")
+        return
+
+    files_data = parse_files(folder)
+    status_var.set(f"{len(files_data)} files detected")
+
     for fdata in files_data:
         try:
-            new_name = fmt.format(number=fdata["number"], title=fdata["title"]) + fdata["ext"]
+            new_name = fmt.format(
+                number=fdata["number"],
+                title=fdata["title"]
+            ) + fdata["ext"]
         except Exception:
             new_name = f"{fdata['number']} - {fdata['title']}{fdata['ext']}"
+
         previews[fdata["original"]] = new_name
         tree.insert("", tk.END, values=(fdata["original"], new_name))
+
 
 def apply_rename():
     folder = folder_path_var.get()
@@ -73,46 +81,81 @@ def apply_rename():
                 os.rename(old_path, new_path)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to rename {old_name}: {e}")
+                return
+
     messagebox.showinfo("Done", "Files renamed successfully!")
     refresh_preview()
 
+
 # ---------------------------
-# GUI
+# CTk GUI
 # ---------------------------
-root = tk.Tk()
+ctk.set_appearance_mode("System")   # Light / Dark / System
+ctk.set_default_color_theme("blue")
+
+root = ctk.CTk()
 root.title("Playlist Renamer")
+root.geometry("900x550")
 
 folder_path_var = tk.StringVar()
-# format_var = tk.StringVar(value="{number} - {title}")
 format_var = tk.StringVar(value="{number}. {title}")
+status_var = tk.StringVar(value="Select a folder")
 
 previews = {}
 
-# Folder selection
-folder_frame = tk.Frame(root)
-folder_frame.pack(fill="x", padx=10, pady=5)
-tk.Label(folder_frame, text="Folder:").pack(side="left")
-tk.Entry(folder_frame, textvariable=folder_path_var, width=50).pack(side="left", padx=5)
-tk.Button(folder_frame, text="Browse", command=select_folder).pack(side="left")
+# ----- Folder Frame -----
+folder_frame = ctk.CTkFrame(root)
+folder_frame.pack(fill="x", padx=15, pady=(15, 5))
 
-# Format input
-format_frame = tk.Frame(root)
-format_frame.pack(fill="x", padx=10, pady=5)
-tk.Label(format_frame, text="Format:").pack(side="left")
-fmt_entry = tk.Entry(format_frame, textvariable=format_var, width=30)
-fmt_entry.pack(side="left", padx=5)
+ctk.CTkLabel(folder_frame, text="Folder").pack(side="left", padx=(10, 5))
+ctk.CTkEntry(folder_frame, textvariable=folder_path_var, width=420).pack(
+    side="left", padx=5
+)
+ctk.CTkButton(folder_frame, text="Browse", command=select_folder).pack(
+    side="left", padx=5
+)
+
+# ----- Format Frame -----
+format_frame = ctk.CTkFrame(root)
+format_frame.pack(fill="x", padx=15, pady=5)
+
+ctk.CTkLabel(format_frame, text="Format").pack(side="left", padx=(10, 5))
+ctk.CTkEntry(format_frame, textvariable=format_var, width=260).pack(
+    side="left", padx=5
+)
+ctk.CTkLabel(
+    format_frame, text="Use {number} and {title}", text_color="gray"
+).pack(side="left", padx=10)
+
 format_var.trace_add("write", refresh_preview)
 
-tk.Label(format_frame, text="Use {number} and {title}").pack(side="left")
+# ----- Preview Frame -----
+preview_frame = ctk.CTkFrame(root)
+preview_frame.pack(fill="both", expand=True, padx=15, pady=5)
 
-# Treeview for preview
-tree = ttk.Treeview(root, columns=("Original", "Preview"), show="headings", height=15)
+tree = ttk.Treeview(
+    preview_frame,
+    columns=("Original", "Preview"),
+    show="headings",
+    height=15
+)
 tree.heading("Original", text="Original Filename")
 tree.heading("Preview", text="Preview New Filename")
-tree.pack(fill="both", padx=10, pady=5, expand=True)
+tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-# Rename button
-tk.Button(root, text="Rename Files", command=apply_rename).pack(pady=10)
+# ----- Actions Frame -----
+actions_frame = ctk.CTkFrame(root)
+actions_frame.pack(fill="x", padx=15, pady=(5, 15))
+
+ctk.CTkLabel(actions_frame, textvariable=status_var).pack(
+    side="left", padx=10
+)
+ctk.CTkButton(
+    actions_frame,
+    text="Rename Files",
+    command=apply_rename,
+    width=160
+).pack(side="right", padx=10)
 
 root.mainloop()
 
